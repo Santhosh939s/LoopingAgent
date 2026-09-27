@@ -1,0 +1,349 @@
+"""
+LightAgent V1 - Main Entry Point
+Launches the Tkinter GUI and starts the agent.
+Press ESC at any time for emergency stop.
+"""
+
+import sys
+import os
+import tkinter as tk
+from tkinter import scrolledtext, messagebox
+import threading
+import keyboard  # For global ESC hotkey
+
+from config import load_config
+from agent import LightAgent
+from workflow import list_workflows
+
+
+# ─── Color Palette ───────────────────────────────────────────────────────────
+BG_DARK       = "#1a1b26"
+BG_PANEL      = "#24283b"
+BG_INPUT      = "#1f2335"
+FG_TEXT        = "#c0caf5"
+FG_DIM        = "#565f89"
+FG_ACCENT     = "#7aa2f7"
+FG_GREEN      = "#9ece6a"
+FG_YELLOW     = "#e0af68"
+FG_RED        = "#f7768e"
+FG_CYAN       = "#7dcfff"
+BTN_START     = "#9ece6a"
+BTN_PAUSE     = "#e0af68"
+BTN_STOP      = "#f7768e"
+BTN_TEXT_DARK = "#1a1b26"
+BORDER        = "#3b4261"
+
+
+class LightAgentGUI:
+    """Minimal Tkinter GUI for LightAgent."""
+
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("LightAgent V1 — LoopingAgent")
+        self.root.geometry("520x680")
+        self.root.resizable(False, False)
+        self.root.configure(bg=BG_DARK)
+
+        # Try to set dark title bar on Windows 10/11
+        try:
+            self.root.attributes("-alpha", 0.97)
+        except Exception:
+            pass
+
+        # Agent (pass GUI log callback)
+        self.agent = LightAgent(gui_log_callback=self._log_to_gui_threadsafe)
+        self.agent.on_status_change = self._update_status_threadsafe
+
+        # Load default workflow
+        self._load_default_workflow()
+
+        # Build UI
+        self._build_ui()
+
+        # Global ESC hotkey for emergency stop
+        self._setup_esc_hotkey()
+
+        # Handle window close
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _load_default_workflow(self):
+        """Load the default antigravity_chatgpt workflow."""
+        workflows = list_workflows()
+        if workflows:
+            self.agent.load_workflow(workflows[0])
+            self.workflow_name = self.agent.runner.workflow["name"] if self.agent.runner else "None"
+        else:
+            self.workflow_name = "No workflows found"
+
+    def _build_ui(self):
+        """Build the GUI layout."""
+        root = self.root
+
+        # ─── Header ──────────────────────────────────────────────────────
+        header_frame = tk.Frame(root, bg=BG_DARK, pady=10)
+        header_frame.pack(fill="x")
+
+        tk.Label(
+            header_frame,
+            text="⚡ LightAgent",
+            font=("Segoe UI", 18, "bold"),
+            fg=FG_ACCENT,
+            bg=BG_DARK,
+        ).pack()
+
+        tk.Label(
+            header_frame,
+            text="Lightweight Desktop Automation",
+            font=("Segoe UI", 9),
+            fg=FG_DIM,
+            bg=BG_DARK,
+        ).pack()
+
+        # ─── Status Panel ────────────────────────────────────────────────
+        status_frame = tk.Frame(root, bg=BG_PANEL, padx=16, pady=12, highlightbackground=BORDER, highlightthickness=1)
+        status_frame.pack(fill="x", padx=16, pady=(0, 8))
+
+        # Status row
+        row1 = tk.Frame(status_frame, bg=BG_PANEL)
+        row1.pack(fill="x", pady=2)
+        tk.Label(row1, text="Status:", font=("Segoe UI", 10, "bold"), fg=FG_DIM, bg=BG_PANEL, width=10, anchor="w").pack(side="left")
+        self.status_label = tk.Label(row1, text="READY", font=("Segoe UI Semibold", 11), fg=FG_GREEN, bg=BG_PANEL, anchor="w")
+        self.status_label.pack(side="left", fill="x")
+
+        # Current step row
+        row2 = tk.Frame(status_frame, bg=BG_PANEL)
+        row2.pack(fill="x", pady=2)
+        tk.Label(row2, text="Current:", font=("Segoe UI", 10, "bold"), fg=FG_DIM, bg=BG_PANEL, width=10, anchor="w").pack(side="left")
+        self.current_label = tk.Label(row2, text="Waiting", font=("Segoe UI", 10), fg=FG_TEXT, bg=BG_PANEL, anchor="w")
+        self.current_label.pack(side="left", fill="x")
+
+        # Workflow row
+        row3 = tk.Frame(status_frame, bg=BG_PANEL)
+        row3.pack(fill="x", pady=2)
+        tk.Label(row3, text="Workflow:", font=("Segoe UI", 10, "bold"), fg=FG_DIM, bg=BG_PANEL, width=10, anchor="w").pack(side="left")
+        self.workflow_label = tk.Label(row3, text=self.workflow_name, font=("Segoe UI", 10), fg=FG_CYAN, bg=BG_PANEL, anchor="w")
+        self.workflow_label.pack(side="left", fill="x")
+
+        # Loop count row
+        row4 = tk.Frame(status_frame, bg=BG_PANEL)
+        row4.pack(fill="x", pady=2)
+        tk.Label(row4, text="Loops:", font=("Segoe UI", 10, "bold"), fg=FG_DIM, bg=BG_PANEL, width=10, anchor="w").pack(side="left")
+        self.loop_label = tk.Label(row4, text="0", font=("Segoe UI", 10), fg=FG_TEXT, bg=BG_PANEL, anchor="w")
+        self.loop_label.pack(side="left", fill="x")
+
+        # ─── Buttons ─────────────────────────────────────────────────────
+        btn_frame = tk.Frame(root, bg=BG_DARK, pady=6)
+        btn_frame.pack(fill="x", padx=16)
+
+        btn_style = {"font": ("Segoe UI Semibold", 11), "width": 10, "height": 1, "bd": 0, "cursor": "hand2", "relief": "flat"}
+
+        self.start_btn = tk.Button(
+            btn_frame, text="▶  START", bg=BTN_START, fg=BTN_TEXT_DARK,
+            command=self._on_start, activebackground="#b5e07d", **btn_style
+        )
+        self.start_btn.pack(side="left", padx=(0, 8))
+
+        self.pause_btn = tk.Button(
+            btn_frame, text="⏸  PAUSE", bg=BTN_PAUSE, fg=BTN_TEXT_DARK,
+            command=self._on_pause, activebackground="#e8c078", state="disabled", **btn_style
+        )
+        self.pause_btn.pack(side="left", padx=(0, 8))
+
+        self.stop_btn = tk.Button(
+            btn_frame, text="⏹  STOP", bg=BTN_STOP, fg=BTN_TEXT_DARK,
+            command=self._on_stop, activebackground="#f99aac", state="disabled", **btn_style
+        )
+        self.stop_btn.pack(side="left")
+
+        # ─── ESC hint ────────────────────────────────────────────────────
+        tk.Label(
+            root, text="Press ESC at any time for emergency stop",
+            font=("Segoe UI", 8), fg=FG_DIM, bg=BG_DARK
+        ).pack(pady=(4, 0))
+
+        # ─── Activity Log ────────────────────────────────────────────────
+        log_header = tk.Frame(root, bg=BG_DARK, pady=4)
+        log_header.pack(fill="x", padx=16)
+        tk.Label(log_header, text="Activity", font=("Segoe UI", 10, "bold"), fg=FG_DIM, bg=BG_DARK).pack(anchor="w")
+
+        self.log_text = scrolledtext.ScrolledText(
+            root,
+            width=58,
+            height=18,
+            bg=BG_INPUT,
+            fg=FG_TEXT,
+            font=("Consolas", 9),
+            insertbackground=FG_TEXT,
+            selectbackground=FG_ACCENT,
+            bd=0,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+            state="disabled",
+            wrap="word",
+        )
+        self.log_text.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+
+        # Configure log text tags for colored entries
+        self.log_text.tag_config("error", foreground=FG_RED)
+        self.log_text.tag_config("success", foreground=FG_GREEN)
+        self.log_text.tag_config("info", foreground=FG_CYAN)
+
+    def _log_to_gui(self, message):
+        """Append a message to the activity log (must be called from main thread)."""
+        self.log_text.configure(state="normal")
+
+        # Determine tag
+        tag = None
+        msg_lower = message.lower()
+        if "error" in msg_lower:
+            tag = "error"
+        elif "switched" in msg_lower or "completed" in msg_lower or "started" in msg_lower:
+            tag = "success"
+        elif "waiting" in msg_lower or "clipboard" in msg_lower:
+            tag = "info"
+
+        if tag:
+            self.log_text.insert("end", message + "\n", tag)
+        else:
+            self.log_text.insert("end", message + "\n")
+
+        self.log_text.see("end")
+        self.log_text.configure(state="disabled")
+
+        # Update loop count
+        if self.agent.runner:
+            self.loop_label.config(text=str(self.agent.runner.loop_count))
+
+    def _log_to_gui_threadsafe(self, message):
+        """Thread-safe version: schedule log update on main thread."""
+        try:
+            self.root.after(0, self._log_to_gui, message)
+        except Exception:
+            pass
+
+    def _update_status(self, status):
+        """Update status label (must be called from main thread)."""
+        self.status_label.config(text=status)
+        self.current_label.config(text=status)
+
+        status_upper = status.upper()
+        if "ERROR" in status_upper:
+            self.status_label.config(fg=FG_RED)
+            self._set_buttons_stopped()
+        elif "RUNNING" in status_upper:
+            self.status_label.config(fg=FG_GREEN)
+        elif "PAUSED" in status_upper:
+            self.status_label.config(fg=FG_YELLOW)
+        elif "STOPPED" in status_upper or "COMPLETED" in status_upper:
+            self.status_label.config(fg=FG_DIM)
+            self._set_buttons_stopped()
+        else:
+            self.current_label.config(text=status)
+
+    def _update_status_threadsafe(self, status):
+        """Thread-safe status update."""
+        try:
+            self.root.after(0, self._update_status, status)
+        except Exception:
+            pass
+
+    def _set_buttons_running(self):
+        """Set button states for running."""
+        self.start_btn.config(state="disabled")
+        self.pause_btn.config(state="normal", text="⏸  PAUSE")
+        self.stop_btn.config(state="normal")
+
+    def _set_buttons_paused(self):
+        """Set button states for paused."""
+        self.start_btn.config(state="disabled")
+        self.pause_btn.config(state="normal", text="▶  RESUME")
+        self.stop_btn.config(state="normal")
+
+    def _set_buttons_stopped(self):
+        """Set button states for stopped."""
+        self.start_btn.config(state="normal")
+        self.pause_btn.config(state="disabled", text="⏸  PAUSE")
+        self.stop_btn.config(state="disabled")
+
+    def _on_start(self):
+        """Handle START button click."""
+        # Reload workflow in case it was edited
+        self._load_default_workflow()
+
+        if self.agent.runner is None:
+            messagebox.showerror("Error", "No workflow loaded. Check workflows/ folder.")
+            return
+
+        # Wire up status callback again
+        self.agent.runner.on_status_change = self._update_status_threadsafe
+
+        success = self.agent.start()
+        if success:
+            self._set_buttons_running()
+            self._update_status("RUNNING")
+        else:
+            status = self.agent.get_status()
+            self._update_status(status)
+
+    def _on_pause(self):
+        """Handle PAUSE/RESUME button click."""
+        if self.agent.is_paused:
+            self.agent.resume()
+            self._set_buttons_running()
+            self._update_status("RUNNING")
+        else:
+            self.agent.pause()
+            self._set_buttons_paused()
+            self._update_status("PAUSED")
+
+    def _on_stop(self):
+        """Handle STOP button click."""
+        self.agent.stop()
+        self._set_buttons_stopped()
+        self._update_status("STOPPED")
+
+    def _setup_esc_hotkey(self):
+        """Register global ESC key for emergency stop."""
+        try:
+            keyboard.on_press_key("esc", lambda _: self._emergency_stop())
+        except Exception as e:
+            self._log_to_gui(f"[Warning] Could not register ESC hotkey: {e}")
+
+    def _emergency_stop(self):
+        """Emergency stop triggered by ESC key."""
+        if self.agent.is_running:
+            self.agent.stop()
+            self._update_status_threadsafe("EMERGENCY STOP")
+            self._log_to_gui_threadsafe("[!] Emergency stop triggered (ESC)")
+            try:
+                self.root.after(0, self._set_buttons_stopped)
+            except Exception:
+                pass
+
+    def _on_close(self):
+        """Handle window close."""
+        self.agent.stop()
+        try:
+            keyboard.unhook_all()
+        except Exception:
+            pass
+        self.root.destroy()
+
+    def run(self):
+        """Start the Tkinter main loop."""
+        self.root.mainloop()
+
+
+def main():
+    """Entry point."""
+    print("=" * 50)
+    print("  LightAgent V1 — LoopingAgent")
+    print("  Lightweight Desktop Automation")
+    print("=" * 50)
+
+    app = LightAgentGUI()
+    app.run()
+
+
+if __name__ == "__main__":
+    main()

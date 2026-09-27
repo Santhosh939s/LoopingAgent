@@ -1,0 +1,66 @@
+{
+    "name": "Antigravity ChatGPT Loop",
+    "description": "Copy from Antigravity, send to ChatGPT, get response, send back to Antigravity, repeat.",
+    "repeat": true,
+    "steps": [
+        {
+            "action": "switch",
+            "target": "antigravity",
+            "description": "Focus Antigravity IDE"
+        },
+        {
+            "action": "copy",
+            "description": "Copy content from Antigravity"
+        },
+        {
+            "action": "wait",
+            "seconds": 0.5,
+            "description": "Wait for clipboard"
+        },
+        {
+            "action": "switch",
+            "target": "chrome",
+            "description": "Focus Chrome / ChatGPT"
+        },
+        {
+            "action": "paste",
+            "description": "Paste into ChatGPT"
+        },
+        {
+            "action": "enter",
+            "description": "Submit to ChatGPT"
+        },
+        {
+            "action": "wait",
+            "seconds": 10,
+            "description": "Wait for ChatGPT response"
+        },
+        {
+            "action": "copy",
+            "description": "Copy ChatGPT response"
+        },
+        {
+            "action": "wait",
+            "seconds": 0.5,
+            "description": "Wait for clipboard"
+        },
+        {
+            "action": "switch",
+            "target": "antigravity",
+            "description": "Focus Antigravity IDE"
+        },
+        {
+            "action": "paste",
+            "description": "Paste into Antigravity"
+        },
+        {
+            "action": "enter",
+            "description": "Submit to Antigravity"
+        },
+        {
+            "action": "wait",
+            "seconds": 10,
+            "description": "Wait for Antigravity response"
+        }
+    ]
+}

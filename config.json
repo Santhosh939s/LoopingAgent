@@ -1,0 +1,12 @@
+{
+    "chatgpt_wait": 10,
+    "antigravity_wait": 10,
+    "paste_delay": 0.3,
+    "copy_delay": 0.5,
+    "enter_after_paste": true,
+    "chrome_title": "Google Chrome",
+    "antigravity_title": "Antigravity",
+    "clipboard_timeout": 5,
+    "max_loops": 0,
+    "loop_delay": 1.0
+}
