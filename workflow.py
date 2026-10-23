@@ -154,7 +154,16 @@ class WorkflowRunner:
         elif action == "drag_copy":
             # Drag-select text using calibrated coordinates, then copy
             area_name = step.get("area", "")
+            fallback_area = step.get("fallback_area", "")
             area_config = self.config.get(area_name)
+            if not area_config and fallback_area:
+                area_config = self.config.get(fallback_area)
+            if not area_config:
+                if "instructor" in area_name or "chatgpt" in area_name:
+                    area_config = self.config.get("instructor_area") or self.config.get("chatgpt_area")
+                elif "listener" in area_name or "worker" in area_name or "antigravity" in area_name:
+                    area_config = self.config.get("listener_area") or self.config.get("worker_area") or self.config.get("antigravity_area")
+
             if not area_config:
                 self.error = f"No coordinates for '{area_name}'. Run: python calibrate.py"
                 return False

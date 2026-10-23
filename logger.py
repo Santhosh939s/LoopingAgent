@@ -46,8 +46,14 @@ class AgentLogger:
             except Exception:
                 pass
 
-        # Also print to console
-        print(line)
+        # Also print to console safely on Windows
+        try:
+            print(line)
+        except UnicodeEncodeError:
+            try:
+                print(line.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(sys.stdout.encoding or "utf-8"))
+            except Exception:
+                pass
 
     def log_clipboard_size(self, content):
         """Log clipboard content size WITHOUT logging the actual content."""

@@ -56,25 +56,60 @@ class LightAgent:
 
         return True
 
+    def set_dynamic_workflow(self, workflow):
+        """Load a dynamic workflow dictionary directly."""
+        if not workflow or "steps" not in workflow:
+            self.logger.log("Failed to load dynamic workflow: invalid format.")
+            return False
+
+        self.logger.log(f"Loaded workflow: {workflow.get('name', 'Dynamic Loop')}")
+        self.runner = WorkflowRunner(
+            workflow=workflow,
+            window_manager=self.wm,
+            clipboard_manager=self.cm,
+            config=self.config,
+            logger=self.logger,
+        )
+
+        if self.on_status_change:
+            self.runner.on_status_change = self.on_status_change
+
+        return True
+
     def preflight_check(self):
         """
         Check that required windows are open before starting.
+        Supports both prompt-driven roles and default windows.
         Returns (ok, message) tuple.
         """
-        chrome_found, antigravity_found = self.wm.check_windows_exist()
+        if not self.runner or not self.runner.workflow:
+            return False, "No workflow loaded."
+
+        roles = self.runner.workflow.get("roles", {})
+        inst = roles.get("instructor")
+        listener = roles.get("listener")
 
         issues = []
-        if not chrome_found:
-            issues.append(f"Chrome window not found. (Looking for: '{self.config['chrome_title']}')")
-        if not antigravity_found:
-            issues.append(f"Antigravity window not found. (Looking for: '{self.config['antigravity_title']}')")
+        if inst and listener:
+            # Check instructor window
+            if not self.wm._find_window(inst) and not any(inst.lower() in t.lower() for t in self.wm.list_all_windows()):
+                issues.append(f"Instructor window '{inst}' not found.")
+            # Check listener window
+            if not self.wm._find_window(listener) and not any(listener.lower() in t.lower() for t in self.wm.list_all_windows()):
+                issues.append(f"Listener window '{listener}' not found.")
+        else:
+            chrome_found, antigravity_found = self.wm.check_windows_exist()
+            if not chrome_found:
+                issues.append(f"Chrome window not found. (Looking for: '{self.config['chrome_title']}')")
+            if not antigravity_found:
+                issues.append(f"Antigravity window not found. (Looking for: '{self.config['antigravity_title']}')")
 
         if issues:
             msg = "\n".join(issues)
             self.logger.log(f"Preflight FAILED:\n{msg}")
             return False, msg
 
-        self.logger.log("Preflight OK: Both windows found.")
+        self.logger.log("Preflight OK: All required windows found.")
         return True, "All windows found."
 
     def start(self):

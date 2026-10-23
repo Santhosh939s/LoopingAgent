@@ -52,11 +52,14 @@ def test():
     print("[OK] LightAgent created")
     print(f"     Status: {agent.get_status()}")
 
-    # Load workflow into agent
-    if wfs:
-        loaded = agent.load_workflow(wfs[0])
-        print(f"[OK] Agent workflow loaded: {loaded}")
-        print(f"     Status: {agent.get_status()}")
+    # Test prompt parser
+    from prompt_parser import parse_prompt, build_workflow_from_prompt
+    sample_prompt = "ChatGPT in Chrome is instructor, Antigravity is listener"
+    roles = parse_prompt(sample_prompt)
+    print(f"[OK] Prompt parsed: Instructor={roles['instructor']}, Listener={roles['listener']}")
+    dyn_wf = build_workflow_from_prompt(sample_prompt, config)
+    dyn_loaded = agent.set_dynamic_workflow(dyn_wf)
+    print(f"[OK] Dynamic workflow loaded: {dyn_loaded} ({len(dyn_wf['steps'])} steps)")
 
     print("\n=== ALL MODULES OK ===")
 

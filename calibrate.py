@@ -237,13 +237,19 @@ class CalibrationTool:
         except (FileNotFoundError, json.JSONDecodeError):
             pass
 
-        # Add coordinate data
+        # Add coordinate data with aliases for prompt-driven loops
         for key in ["chatgpt_area", "antigravity_area"]:
             if key in self.results:
-                config[key] = {
+                coords = {
                     "top_left": list(self.results[key]["top_left"]),
                     "bottom_right": list(self.results[key]["bottom_right"]),
                 }
+                config[key] = coords
+                if key == "chatgpt_area":
+                    config["instructor_area"] = coords
+                elif key == "antigravity_area":
+                    config["listener_area"] = coords
+                    config["worker_area"] = coords
 
         # Save
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:

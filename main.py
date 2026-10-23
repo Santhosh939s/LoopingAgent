@@ -1,6 +1,6 @@
 """
 LightAgent V1 - Main Entry Point
-Launches the Tkinter GUI and starts the agent.
+Launches the Tkinter GUI and starts the prompt-driven automation agent.
 Press ESC at any time for emergency stop.
 """
 
@@ -14,6 +14,7 @@ import keyboard  # For global ESC hotkey
 from config import load_config
 from agent import LightAgent
 from workflow import list_workflows
+from prompt_parser import parse_prompt, build_workflow_from_prompt
 
 
 # ─── Color Palette ───────────────────────────────────────────────────────────
@@ -35,12 +36,12 @@ BORDER        = "#3b4261"
 
 
 class LightAgentGUI:
-    """Minimal Tkinter GUI for LightAgent."""
+    """Minimal Tkinter GUI for LightAgent with Prompt-Driven Automation."""
 
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("LightAgent V1 — LoopingAgent")
-        self.root.geometry("520x680")
+        self.root.geometry("540x720")
         self.root.resizable(False, False)
         self.root.configure(bg=BG_DARK)
 
@@ -54,11 +55,15 @@ class LightAgentGUI:
         self.agent = LightAgent(gui_log_callback=self._log_to_gui_threadsafe)
         self.agent.on_status_change = self._update_status_threadsafe
 
-        # Load default workflow
-        self._load_default_workflow()
+        # Default prompt
+        self.default_prompt = "ChatGPT in Chrome is instructor, Antigravity is listener"
+        self.workflow_name = "ChatGPT <-> Antigravity Loop"
 
         # Build UI
         self._build_ui()
+
+        # Initialize workflow from prompt
+        self._sync_workflow_from_prompt()
 
         # Global ESC hotkey for emergency stop
         self._setup_esc_hotkey()
@@ -66,21 +71,24 @@ class LightAgentGUI:
         # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    def _load_default_workflow(self):
-        """Load the default antigravity_chatgpt workflow."""
-        workflows = list_workflows()
-        if workflows:
-            self.agent.load_workflow(workflows[0])
-            self.workflow_name = self.agent.runner.workflow["name"] if self.agent.runner else "None"
-        else:
-            self.workflow_name = "No workflows found"
+    def _sync_workflow_from_prompt(self):
+        """Build and load workflow from current prompt text."""
+        prompt = self.prompt_var.get().strip()
+        if not prompt:
+            prompt = self.default_prompt
+        open_wins = self.agent.wm.list_all_windows()
+        wf = build_workflow_from_prompt(prompt, self.agent.config, open_windows)
+        self.agent.set_dynamic_workflow(wf)
+        self.workflow_name = wf.get("name", "Dynamic Loop")
+        if hasattr(self, "workflow_label"):
+            self.workflow_label.config(text=self.workflow_name)
 
     def _build_ui(self):
         """Build the GUI layout."""
         root = self.root
 
         # ─── Header ──────────────────────────────────────────────────────
-        header_frame = tk.Frame(root, bg=BG_DARK, pady=10)
+        header_frame = tk.Frame(root, bg=BG_DARK, pady=8)
         header_frame.pack(fill="x")
 
         tk.Label(
@@ -93,14 +101,56 @@ class LightAgentGUI:
 
         tk.Label(
             header_frame,
-            text="Lightweight Desktop Automation",
+            text="Prompt-Driven Autonomous Desktop Loop",
             font=("Segoe UI", 9),
             fg=FG_DIM,
             bg=BG_DARK,
         ).pack()
 
+        # ─── Prompt Input Panel (Option A) ───────────────────────────────
+        prompt_frame = tk.Frame(root, bg=BG_PANEL, padx=14, pady=10, highlightbackground=BORDER, highlightthickness=1)
+        prompt_frame.pack(fill="x", padx=16, pady=(0, 8))
+
+        # Title row
+        p_row1 = tk.Frame(prompt_frame, bg=BG_PANEL)
+        p_row1.pack(fill="x", pady=(0, 4))
+        tk.Label(
+            p_row1,
+            text="Prompt (Who instructs & who executes):",
+            font=("Segoe UI", 9, "bold"),
+            fg=FG_ACCENT,
+            bg=BG_PANEL,
+        ).pack(side="left")
+
+        # Entry box
+        self.prompt_var = tk.StringVar(value=self.default_prompt)
+        self.prompt_entry = tk.Entry(
+            prompt_frame,
+            textvariable=self.prompt_var,
+            font=("Segoe UI", 10),
+            bg=BG_INPUT,
+            fg=FG_TEXT,
+            insertbackground=FG_TEXT,
+            relief="flat",
+            highlightbackground=BORDER,
+            highlightthickness=1,
+        )
+        self.prompt_entry.pack(fill="x", ipady=3, pady=(0, 5))
+        self.prompt_entry.bind("<KeyRelease>", lambda e: self._on_prompt_change())
+
+        # Detected roles preview
+        self.parse_preview_label = tk.Label(
+            prompt_frame,
+            text="Instructor: Chrome  →  Worker: Antigravity",
+            font=("Segoe UI", 9),
+            fg=FG_GREEN,
+            bg=BG_PANEL,
+            anchor="w",
+        )
+        self.parse_preview_label.pack(fill="x")
+
         # ─── Status Panel ────────────────────────────────────────────────
-        status_frame = tk.Frame(root, bg=BG_PANEL, padx=16, pady=12, highlightbackground=BORDER, highlightthickness=1)
+        status_frame = tk.Frame(root, bg=BG_PANEL, padx=16, pady=10, highlightbackground=BORDER, highlightthickness=1)
         status_frame.pack(fill="x", padx=16, pady=(0, 8))
 
         # Status row
@@ -132,7 +182,7 @@ class LightAgentGUI:
         self.loop_label.pack(side="left", fill="x")
 
         # ─── Buttons ─────────────────────────────────────────────────────
-        btn_frame = tk.Frame(root, bg=BG_DARK, pady=6)
+        btn_frame = tk.Frame(root, bg=BG_DARK, pady=4)
         btn_frame.pack(fill="x", padx=16)
 
         btn_style = {"font": ("Segoe UI Semibold", 11), "width": 10, "height": 1, "bd": 0, "cursor": "hand2", "relief": "flat"}
@@ -159,7 +209,7 @@ class LightAgentGUI:
         tk.Label(
             root, text="Press ESC at any time for emergency stop",
             font=("Segoe UI", 8), fg=FG_DIM, bg=BG_DARK
-        ).pack(pady=(4, 0))
+        ).pack(pady=(2, 0))
 
         # ─── Activity Log ────────────────────────────────────────────────
         log_header = tk.Frame(root, bg=BG_DARK, pady=4)
@@ -169,7 +219,7 @@ class LightAgentGUI:
         self.log_text = scrolledtext.ScrolledText(
             root,
             width=58,
-            height=18,
+            height=14,
             bg=BG_INPUT,
             fg=FG_TEXT,
             font=("Consolas", 9),
@@ -181,18 +231,26 @@ class LightAgentGUI:
             state="disabled",
             wrap="word",
         )
-        self.log_text.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+        self.log_text.pack(fill="both", expand=True, padx=16, pady=(0, 10))
 
         # Configure log text tags for colored entries
         self.log_text.tag_config("error", foreground=FG_RED)
         self.log_text.tag_config("success", foreground=FG_GREEN)
         self.log_text.tag_config("info", foreground=FG_CYAN)
 
+    def _on_prompt_change(self):
+        """Update live preview when the user edits the prompt."""
+        prompt = self.prompt_var.get().strip()
+        open_wins = self.agent.wm.list_all_windows()
+        roles = parse_prompt(prompt, open_wins)
+        inst = roles["instructor"]
+        worker = roles["listener"]
+        self.parse_preview_label.config(text=f"Instructor: {inst}  →  Worker: {worker}")
+
     def _log_to_gui(self, message):
         """Append a message to the activity log (must be called from main thread)."""
         self.log_text.configure(state="normal")
 
-        # Determine tag
         tag = None
         msg_lower = message.lower()
         if "error" in msg_lower:
@@ -210,7 +268,6 @@ class LightAgentGUI:
         self.log_text.see("end")
         self.log_text.configure(state="disabled")
 
-        # Update loop count
         if self.agent.runner:
             self.loop_label.config(text=str(self.agent.runner.loop_count))
 
@@ -225,7 +282,6 @@ class LightAgentGUI:
         """Update status label (must be called from main thread)."""
         status_upper = status.upper()
 
-        # These are state changes — update the status label
         if "ERROR" in status_upper:
             self.status_label.config(text=status, fg=FG_RED)
             self.current_label.config(text=status)
@@ -244,7 +300,6 @@ class LightAgentGUI:
             self.current_label.config(text="Stopped by ESC")
             self._set_buttons_stopped()
         else:
-            # Step descriptions go to current_label only
             self.current_label.config(text=status)
 
     def _update_status_threadsafe(self, status):
@@ -259,6 +314,7 @@ class LightAgentGUI:
         self.start_btn.config(state="disabled")
         self.pause_btn.config(state="normal", text="⏸  PAUSE")
         self.stop_btn.config(state="normal")
+        self.prompt_entry.config(state="disabled")
 
     def _set_buttons_paused(self):
         """Set button states for paused."""
@@ -271,14 +327,15 @@ class LightAgentGUI:
         self.start_btn.config(state="normal")
         self.pause_btn.config(state="disabled", text="⏸  PAUSE")
         self.stop_btn.config(state="disabled")
+        self.prompt_entry.config(state="normal")
 
     def _on_start(self):
         """Handle START button click."""
-        # Reload workflow in case it was edited
-        self._load_default_workflow()
+        # Synchronize dynamic workflow from prompt
+        self._sync_workflow_from_prompt()
 
         if self.agent.runner is None:
-            messagebox.showerror("Error", "No workflow loaded. Check workflows/ folder.")
+            messagebox.showerror("Error", "Could not build workflow from prompt.")
             return
 
         # Wire up status callback again
@@ -345,7 +402,7 @@ def main():
     """Entry point."""
     print("=" * 50)
     print("  LightAgent V1 — LoopingAgent")
-    print("  Lightweight Desktop Automation")
+    print("  Prompt-Driven Desktop Automation")
     print("=" * 50)
 
     app = LightAgentGUI()

@@ -138,19 +138,30 @@ class WindowManager:
 
     def switch_to(self, target):
         """
-        Switch to a named target.
+        Switch to a named target or any open window matching target.
         Args:
-            target: "chrome" or "antigravity"
+            target: "chrome", "antigravity", "whatsapp", "notepad", etc.
         Returns: True on success, False on failure.
         """
-        target = target.lower().strip()
-        if target == "chrome":
+        target_lower = target.lower().strip()
+        if target_lower == "chrome":
             return self.switch_to_chrome()
-        elif target == "antigravity":
+        elif target_lower == "antigravity":
             return self.switch_to_antigravity()
-        else:
-            self.logger.log(f"Unknown switch target: '{target}'")
-            return False
+
+        # Generic lookup for ANY open application
+        hwnd = self._find_window(target)
+        if hwnd:
+            return self._activate_window(hwnd, target)
+
+        # Check fuzzy matching among all open windows
+        windows = _enum_windows()
+        for h, title in windows:
+            if target_lower in title.lower():
+                return self._activate_window(h, title)
+
+        self.logger.log(f"Window matching '{target}' not found.")
+        return False
 
     def check_windows_exist(self):
         """
