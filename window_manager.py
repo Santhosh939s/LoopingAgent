@@ -112,6 +112,12 @@ class WindowManager:
         """Find and activate the Chrome window. Returns True on success."""
         hwnd = self._find_window(self.chrome_title)
         if hwnd is None:
+            # Try fallback search terms
+            for alt in ["Chrome", "ChatGPT", "Google Chrome"]:
+                hwnd = self._find_window(alt)
+                if hwnd:
+                    break
+        if hwnd is None:
             self.logger.log(f"Chrome window not found. (Looking for: '{self.chrome_title}')")
             return False
         return self._activate_window(hwnd, "Chrome")
@@ -119,6 +125,12 @@ class WindowManager:
     def switch_to_antigravity(self):
         """Find and activate the Antigravity window. Returns True on success."""
         hwnd = self._find_window(self.antigravity_title)
+        if hwnd is None:
+            # Try fallback search terms
+            for alt in ["Antigravity", "Visual Studio Code", "Code"]:
+                hwnd = self._find_window(alt)
+                if hwnd:
+                    break
         if hwnd is None:
             self.logger.log(f"Antigravity window not found. (Looking for: '{self.antigravity_title}')")
             return False
