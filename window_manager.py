@@ -1,16 +1,50 @@
 """
 LightAgent V1 - Window Manager
 Finds and activates existing windows by title. NEVER launches applications.
-Uses pygetwindow for lightweight Windows window management.
+Uses ctypes Win32 API for reliable window switching on Windows.
 """
 
 import time
+import ctypes
+import ctypes.wintypes
 
-try:
-    import pygetwindow as gw
-except ImportError:
-    gw = None
-    print("[WindowManager] pygetwindow not installed. Run: pip install pygetwindow")
+# Win32 API functions
+user32 = ctypes.windll.user32
+
+EnumWindows = user32.EnumWindows
+GetWindowTextW = user32.GetWindowTextW
+GetWindowTextLengthW = user32.GetWindowTextLengthW
+IsWindowVisible = user32.IsWindowVisible
+SetForegroundWindow = user32.SetForegroundWindow
+ShowWindow = user32.ShowWindow
+IsIconic = user32.IsIconic  # Check if minimized
+BringWindowToTop = user32.BringWindowToTop
+
+# ShowWindow constants
+SW_RESTORE = 9
+SW_SHOW = 5
+
+# Callback type for EnumWindows
+WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+
+
+def _enum_windows():
+    """Enumerate all visible windows with titles. Returns list of (hwnd, title)."""
+    results = []
+
+    def callback(hwnd, lParam):
+        if IsWindowVisible(hwnd):
+            length = GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                GetWindowTextW(hwnd, buff, length + 1)
+                title = buff.value
+                if title.strip():
+                    results.append((hwnd, title))
+        return True
+
+    EnumWindows(WNDENUMPROC(callback), 0)
+    return results
 
 
 class WindowManager:
@@ -25,32 +59,46 @@ class WindowManager:
     def _find_window(self, title_substring):
         """
         Find an open window whose title contains the given substring.
-        Returns the window object or None.
+        Returns the hwnd (window handle) or None.
         """
-        if gw is None:
-            self.logger.log("ERROR: pygetwindow not available.")
-            return None
-
         try:
-            windows = gw.getWindowsWithTitle(title_substring)
-            if windows:
-                # Return the first matching window
-                return windows[0]
+            windows = _enum_windows()
+            for hwnd, title in windows:
+                if title_substring.lower() in title.lower():
+                    return hwnd
         except Exception as e:
             self.logger.log(f"ERROR finding window '{title_substring}': {e}")
 
         return None
 
-    def _activate_window(self, window, name):
-        """Bring a window to the foreground."""
+    def _activate_window(self, hwnd, name):
+        """Bring a window to the foreground using Win32 API."""
         try:
             # If minimized, restore it first
-            if window.isMinimized:
-                window.restore()
+            if IsIconic(hwnd):
+                ShowWindow(hwnd, SW_RESTORE)
                 time.sleep(0.3)
 
-            # Activate (bring to front)
-            window.activate()
+            # Try SetForegroundWindow (most reliable)
+            # Trick: attach to foreground thread to bypass Windows restriction
+            try:
+                foreground_hwnd = user32.GetForegroundWindow()
+                foreground_tid = user32.GetWindowThreadProcessId(foreground_hwnd, None)
+                current_tid = ctypes.windll.kernel32.GetCurrentThreadId()
+
+                if foreground_tid != current_tid:
+                    user32.AttachThreadInput(current_tid, foreground_tid, True)
+                    SetForegroundWindow(hwnd)
+                    BringWindowToTop(hwnd)
+                    user32.AttachThreadInput(current_tid, foreground_tid, False)
+                else:
+                    SetForegroundWindow(hwnd)
+                    BringWindowToTop(hwnd)
+            except Exception:
+                # Fallback: just try SetForegroundWindow directly
+                SetForegroundWindow(hwnd)
+
+            ShowWindow(hwnd, SW_SHOW)
             time.sleep(0.5)  # Give Windows time to switch
 
             self.logger.log(f"Switched to {name}")
@@ -62,19 +110,19 @@ class WindowManager:
 
     def switch_to_chrome(self):
         """Find and activate the Chrome window. Returns True on success."""
-        window = self._find_window(self.chrome_title)
-        if window is None:
+        hwnd = self._find_window(self.chrome_title)
+        if hwnd is None:
             self.logger.log(f"Chrome window not found. (Looking for: '{self.chrome_title}')")
             return False
-        return self._activate_window(window, "Chrome")
+        return self._activate_window(hwnd, "Chrome")
 
     def switch_to_antigravity(self):
         """Find and activate the Antigravity window. Returns True on success."""
-        window = self._find_window(self.antigravity_title)
-        if window is None:
+        hwnd = self._find_window(self.antigravity_title)
+        if hwnd is None:
             self.logger.log(f"Antigravity window not found. (Looking for: '{self.antigravity_title}')")
             return False
-        return self._activate_window(window, "Antigravity")
+        return self._activate_window(hwnd, "Antigravity")
 
     def switch_to(self, target):
         """
@@ -103,9 +151,7 @@ class WindowManager:
 
     def list_all_windows(self):
         """List all open window titles (for debugging)."""
-        if gw is None:
-            return []
         try:
-            return [w.title for w in gw.getAllWindows() if w.title.strip()]
+            return [title for _, title in _enum_windows()]
         except Exception:
             return []

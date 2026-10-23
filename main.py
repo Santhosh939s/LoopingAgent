@@ -223,21 +223,28 @@ class LightAgentGUI:
 
     def _update_status(self, status):
         """Update status label (must be called from main thread)."""
-        self.status_label.config(text=status)
-        self.current_label.config(text=status)
-
         status_upper = status.upper()
+
+        # These are state changes — update the status label
         if "ERROR" in status_upper:
-            self.status_label.config(fg=FG_RED)
+            self.status_label.config(text=status, fg=FG_RED)
+            self.current_label.config(text=status)
             self._set_buttons_stopped()
         elif "RUNNING" in status_upper:
-            self.status_label.config(fg=FG_GREEN)
+            self.status_label.config(text="RUNNING", fg=FG_GREEN)
         elif "PAUSED" in status_upper:
-            self.status_label.config(fg=FG_YELLOW)
+            self.status_label.config(text="PAUSED", fg=FG_YELLOW)
+            self.current_label.config(text="Paused")
         elif "STOPPED" in status_upper or "COMPLETED" in status_upper:
-            self.status_label.config(fg=FG_DIM)
+            self.status_label.config(text=status, fg=FG_DIM)
+            self.current_label.config(text="Idle")
+            self._set_buttons_stopped()
+        elif "EMERGENCY" in status_upper:
+            self.status_label.config(text="EMERGENCY STOP", fg=FG_RED)
+            self.current_label.config(text="Stopped by ESC")
             self._set_buttons_stopped()
         else:
+            # Step descriptions go to current_label only
             self.current_label.config(text=status)
 
     def _update_status_threadsafe(self, status):
