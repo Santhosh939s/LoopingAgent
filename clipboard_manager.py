@@ -1,6 +1,6 @@
 """
 LightAgent V1 - Clipboard Manager
-Handles copy/paste via keyboard shortcuts. Uses clipboard safely.
+Handles copy/paste via keyboard shortcuts and mouse-drag selection.
 NEVER stores or logs clipboard contents permanently.
 """
 
@@ -25,6 +25,62 @@ class ClipboardManager:
             return pyperclip.paste()
         except Exception:
             return ""
+
+    def drag_select(self, area_config):
+        """
+        Select text by mouse-dragging from top-left to bottom-right.
+        Args:
+            area_config: dict with 'top_left': [x,y] and 'bottom_right': [x,y]
+        """
+        if not area_config:
+            self.logger.log("ERROR: No area coordinates configured. Run calibrate.py first.")
+            return False
+
+        top_left = area_config.get("top_left")
+        bottom_right = area_config.get("bottom_right")
+
+        if not top_left or not bottom_right:
+            self.logger.log("ERROR: Incomplete area coordinates. Run calibrate.py first.")
+            return False
+
+        x1, y1 = top_left
+        x2, y2 = bottom_right
+
+        self.logger.log(f"Drag selecting: ({x1},{y1}) -> ({x2},{y2})")
+
+        # Move to start position
+        pyautogui.moveTo(x1, y1, duration=0.15)
+        time.sleep(0.1)
+
+        # Click and drag to end position
+        pyautogui.click(x1, y1)
+        time.sleep(0.05)
+        pyautogui.moveTo(x1, y1, duration=0.05)
+        pyautogui.mouseDown(button='left')
+        time.sleep(0.05)
+        pyautogui.moveTo(x2, y2, duration=0.3)
+        time.sleep(0.05)
+        pyautogui.mouseUp(button='left')
+        time.sleep(0.2)
+
+        self.logger.log("Drag select complete.")
+        return True
+
+    def drag_select_and_copy(self, area_config):
+        """
+        Drag-select text in an area, then Ctrl+C to copy.
+        Args:
+            area_config: dict with 'top_left' and 'bottom_right' coordinates.
+        Returns: clipboard content string, or None on failure.
+        """
+        success = self.drag_select(area_config)
+        if not success:
+            return None
+
+        # Small pause before copy
+        time.sleep(0.15)
+
+        return self.copy_current()
 
     def copy_current(self):
         """

@@ -9,12 +9,9 @@
             "description": "Focus Antigravity IDE"
         },
         {
-            "action": "select_all",
-            "description": "Select all text in Antigravity (Ctrl+A)"
-        },
-        {
-            "action": "copy",
-            "description": "Copy selected text from Antigravity"
+            "action": "drag_copy",
+            "area": "antigravity_area",
+            "description": "Drag-select and copy text from Antigravity"
         },
         {
             "action": "wait",
@@ -40,12 +37,9 @@
             "description": "Wait for ChatGPT response"
         },
         {
-            "action": "select_all",
-            "description": "Select all text in ChatGPT (Ctrl+A)"
-        },
-        {
-            "action": "copy",
-            "description": "Copy ChatGPT response"
+            "action": "drag_copy",
+            "area": "chatgpt_area",
+            "description": "Drag-select and copy ChatGPT response"
         },
         {
             "action": "wait",

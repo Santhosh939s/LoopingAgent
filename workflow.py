@@ -151,6 +151,19 @@ class WorkflowRunner:
 
             return True
 
+        elif action == "drag_copy":
+            # Drag-select text using calibrated coordinates, then copy
+            area_name = step.get("area", "")
+            area_config = self.config.get(area_name)
+            if not area_config:
+                self.error = f"No coordinates for '{area_name}'. Run: python calibrate.py"
+                return False
+            result = self.cm.drag_select_and_copy(area_config)
+            if result is None:
+                self.error = "Clipboard did not update after drag-copy."
+                return False
+            return True
+
         elif action == "select_all":
             self.cm.select_all()
             return True
